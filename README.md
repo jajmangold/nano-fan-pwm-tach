@@ -100,24 +100,34 @@ mode=rpm tgt=2500  duty=61.9%  rpm=2455  pulses=4950
 
 ## Measured behaviour
 
-Taken from a real fan on this rig:
+**0% stops the fan.** Holding the PWM line at DC ground halts it completely;
+there is no minimum-speed floor on this fan.
+
+Settled operating points, taken from closed-loop runs that held steady for tens
+of seconds:
 
 | Duty | RPM |
 |------|-----|
-| 0% | ~620 |
-| 20% | ~100 (stalls) |
-| 30% | ~580 |
-| 50% | ~2080 |
-| 70% | ~3070 |
-| 100% | ~4380 |
+| 0% | 0 (stopped) |
+| ~39% | ~1220 |
+| ~62% | ~2480 |
+| 100% | ~3800 |
 
-Two things fall out of this:
+That works out to roughly **55 RPM per percent duty**, which is where `CTRL_KP`
+and `CTRL_KI` come from.
 
-- **20% stalls the fan** — below the 30% figure. Hence `MIN_DUTY = 30`, which
-  lifts anything in `1..29` up to 30%.
-- **0% does not stop the fan.** The code holds the line at DC ground with no
-  edges, and the fan failsafes to a ~620 RPM floor. This is normal 4-wire
-  behaviour, not a bug.
+Treat intermediate figures as indicative only. A duty sweep with 5-second dwell
+per step does **not** settle: in one such run 40% read 1333 RPM on the way up
+and 1681 RPM on the way back down. Anything measured that way is a point on a
+transient, not a steady state. Measure with long dwell times if you need a real
+curve.
+
+`MIN_DUTY = 30` lifts anything in `1..29` to 30%. It is a conservative guard
+against the low-duty region where the fan will not reliably start or sustain
+rotation, rather than a precisely characterised threshold.
+
+The fan's output also drifts within a session — 60% duty gave 2601 RPM early on
+and 2410 RPM later. The closed loop absorbs this; open-loop duty does not.
 
 Closed-loop step response settles inside ~1% of target with no overshoot.
 

@@ -37,14 +37,14 @@ static const uint8_t PULSES_PER_REV = 2;
 static const bool INVERT_DRIVE = true;
 
 /*
- * Measured on this fan: 20% duty stalls it (~100 RPM, below the 30% figure),
- * so anything in 1..MIN_DUTY-1 is lifted to MIN_DUTY. 0 is left alone and
- * means "minimum" - this fan floors at ~620 RPM rather than stopping.
+ * Low duty will not reliably start or sustain rotation, so anything in
+ * 1..MIN_DUTY-1 is lifted to MIN_DUTY. 0 is deliberately left alone and means
+ * off: holding the PWM line at DC ground stops this fan completely.
  */
 static const uint8_t MIN_DUTY = 30;
 
 /*
- * Measured slope is ~54 RPM per % duty, so 1/54 = 0.0185 would be a one-step
+ * Measured slope is ~55 RPM per % duty, so 1/55 = 0.018 would be a one-step
  * deadbeat correction. Kp stays well under that on purpose: rpm here is an
  * average over the previous second, so the proportional term is always acting
  * on a stale measurement and a large Kp just makes the loop hunt. The integral
@@ -152,7 +152,7 @@ static void applyPinCount(uint16_t cnt)
 /*
  * Raw setter, no stall clamp - the controller clamps for itself. Duty is kept
  * fractional and converted straight to timer counts: rounding to whole percent
- * would waste 639 of the 640 available steps down to 101, and at ~54 RPM per
+ * would waste 639 of the 640 available steps down to 101, and at ~55 RPM per
  * percent that quantization alone puts a +-27 RPM floor under the closed loop.
  */
 static void applyFanPercent(float pct)
