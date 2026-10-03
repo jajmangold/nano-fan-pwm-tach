@@ -125,12 +125,39 @@ Closed-loop step response settles inside ~1% of target with no overshoot.
 verified** here. If your fan's spec sheet disagrees with the reported top-end
 RPM by 2x, that constant is why.
 
+## FanDiag
+
+`FanDiag/` is a separate bring-up sketch for when the tach reads zero and you
+need to know why. At three fan commands it reports, over a one-second window,
+the raw high/low sample counts on D2, the edge count seen by brute-force
+polling, and the edge count seen by the interrupt handler — plus the live
+Timer1 registers.
+
+Reading those together separates the failure modes:
+
+| Symptom | Means |
+|---------|-------|
+| All zero, line stuck at one level | no signal arriving at all |
+| Polled edges but no ISR edges | interrupt misconfigured |
+| Both counting | tach path healthy; any RPM error is in the maths |
+
+One warning it encodes: a hard-low reading on a pin wired to a driver module is
+**not** proof of a short. Those modules carry a gate pull-down that beats the
+AVR internal pull-up, so probing a PWM output pin as `INPUT_PULLUP` reads a
+convincing dead zero. That mistake cost real time on this rig.
+
 ## Build
 
 ```sh
 arduino-cli core install arduino:avr
 arduino-cli compile --fqbn arduino:avr:nano .
 arduino-cli upload  --fqbn arduino:avr:nano -p COM4 .
+```
+
+`FanDiag` builds the same way, pointed at its own folder:
+
+```sh
+arduino-cli compile --fqbn arduino:avr:nano FanDiag
 ```
 
 CH340-based Nano clones are often assumed to need the `atmega328old` 57600
