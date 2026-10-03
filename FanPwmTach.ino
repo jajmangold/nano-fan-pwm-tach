@@ -37,18 +37,25 @@ static const uint8_t PULSES_PER_REV = 2;
 static const bool INVERT_DRIVE = true;
 
 /*
- * Low duty will not reliably start or sustain rotation, so anything in
- * 1..MIN_DUTY-1 is lifted to MIN_DUTY. 0 is deliberately left alone and means
- * off: holding the PWM line at DC ground stops this fan completely.
+ * Below ~30% the fan clamps to its own minimum: 20% and 30% both settle at
+ * ~533 RPM, so lower duty buys no control authority. Anything in 1..MIN_DUTY-1
+ * is lifted here. 0 is deliberately left alone and means off - holding the PWM
+ * line at DC ground stops this fan completely.
  */
 static const uint8_t MIN_DUTY = 30;
 
 /*
- * Measured slope is ~55 RPM per % duty, so 1/55 = 0.018 would be a one-step
- * deadbeat correction. Kp stays well under that on purpose: rpm here is an
- * average over the previous second, so the proportional term is always acting
- * on a stale measurement and a large Kp just makes the loop hunt. The integral
- * does the real work and is what pins the steady-state error to ~0.
+ * The plant is nonlinear: measured gain runs ~75 RPM per % duty around 30-40%
+ * but only ~23 RPM per % around 80-90%, so there is no single deadbeat value -
+ * it ranges from 1/75 = 0.013 to 1/23 = 0.043. Kp is set below the whole range
+ * so the loop cannot hunt in the high-gain region, which necessarily leaves it
+ * conservative up top. rpm is also an average over the previous second, so the
+ * proportional term always acts on a stale measurement, which is a second
+ * reason to keep Kp small. The integral does the real work and is what pins
+ * the steady-state error to ~0.
+ *
+ * Consequence to expect: low targets settle briskly, high targets crawl the
+ * last few percent. Gain scheduling on duty would fix that if it matters.
  */
 static const float CTRL_KP = 0.010f;    /* %duty per RPM            */
 static const float CTRL_KI = 0.006f;    /* %duty per RPM per second */
@@ -152,8 +159,9 @@ static void applyPinCount(uint16_t cnt)
 /*
  * Raw setter, no stall clamp - the controller clamps for itself. Duty is kept
  * fractional and converted straight to timer counts: rounding to whole percent
- * would waste 639 of the 640 available steps down to 101, and at ~55 RPM per
- * percent that quantization alone puts a +-27 RPM floor under the closed loop.
+ * would waste 639 of the 640 available steps down to 101, and at the measured
+ * 23-75 RPM per percent that quantization alone would put a floor of roughly
+ * +-12 to +-38 RPM under the closed loop.
  */
 static void applyFanPercent(float pct)
 {

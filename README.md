@@ -100,34 +100,54 @@ mode=rpm tgt=2500  duty=61.9%  rpm=2455  pulses=4950
 
 ## Measured behaviour
 
-**0% stops the fan.** Holding the PWM line at DC ground halts it completely;
-there is no minimum-speed floor on this fan.
+Measured with **30 s dwell per step**, ascending from a dead stop then back
+down. Every point settled to a spread of 0–3 RPM over the final 8 s, so these
+are genuine steady states.
 
-Settled operating points, taken from closed-loop runs that held steady for tens
-of seconds:
+| Duty | RPM (up) | RPM (down) |
+|------|----------|------------|
+| 0% | **0** | **0** |
+| 20% | 532 | 535 |
+| 30% | 534 | 535 |
+| 40% | 1283 | — |
+| 50% | 1915 | 1909 |
+| 60% | 2390 | — |
+| 70% | 2756 | 2770 |
+| 80% | 3078 | — |
+| 90% | 3303 | — |
+| 100% | 3763 | — |
 
-| Duty | RPM |
-|------|-----|
-| 0% | 0 (stopped) |
-| ~39% | ~1220 |
-| ~62% | ~2480 |
-| 100% | ~3800 |
+Four things fall out of this:
 
-That works out to roughly **55 RPM per percent duty**, which is where `CTRL_KP`
-and `CTRL_KI` come from.
+- **0% stops the fan.** Holding the PWM line at DC ground halts it completely.
+  There is no minimum-speed floor.
+- **No hysteresis.** Ascending and descending agree within 0.5%, so direction
+  of approach does not matter once settled.
+- **Below ~30% there is no control authority.** 20% and 30% both give ~533 RPM;
+  the fan clamps to its own minimum. 20% *does* start the fan from a dead stop,
+  so this is not a stall threshold. `MIN_DUTY = 30` therefore costs nothing and
+  marks the knee of the curve rather than guarding against a stall.
+- **The response is strongly nonlinear** — about 75 RPM per percent across
+  30→40%, but only 23 RPM per percent across 80→90%, a 3x spread. See the note
+  on `CTRL_KP` below for what that means for tuning.
 
-Treat intermediate figures as indicative only. A duty sweep with 5-second dwell
-per step does **not** settle: in one such run 40% read 1333 RPM on the way up
-and 1681 RPM on the way back down. Anything measured that way is a point on a
-transient, not a steady state. Measure with long dwell times if you need a real
-curve.
+Two oddities worth knowing:
 
-`MIN_DUTY = 30` lifts anything in `1..29` to 30%. It is a conservative guard
-against the low-duty region where the fan will not reliably start or sustain
-rotation, rather than a precisely characterised threshold.
+- **100% is not just "99% plus one".** 90→100% adds 460 RPM where 80→90% added
+  only 225. At 100% the code detaches the compare output and holds the line at
+  DC high, and the fan appears to treat the absence of PWM as a full-speed
+  override. It is also the only noisy point (±17 RPM vs ±1–3 elsewhere).
+- **Output drifts downward over a session.** 60% duty read 2601 RPM early on,
+  2410 later, and 2390 in this sweep; 100% went from 4382 to 3763. Cause
+  unconfirmed — plausibly motor warm-up or a sagging 12 V rail. The closed loop
+  absorbs it; open-loop duty does not. Re-measure before trusting absolute
+  figures.
 
-The fan's output also drifts within a session — 60% duty gave 2601 RPM early on
-and 2410 RPM later. The closed loop absorbs this; open-loop duty does not.
+A warning on method, since it produced two wrong conclusions here: a sweep with
+**5-second dwell does not settle**, and its numbers are points on a transient.
+It made 0% look like it had a ~620 RPM floor (coastdown) and made the fan look
+hysteretic (1333 RPM at 40% ascending vs 1681 descending). Both vanished at
+30 s dwell.
 
 Closed-loop step response settles inside ~1% of target with no overshoot.
 
